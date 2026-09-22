@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 
 import { AuthProvider, useAuth } from "../src/features/auth/AuthProvider";
+import { OnboardingRequired } from "../src/features/auth/OnboardingRequired";
 import { useAppFonts } from "../src/theme/fonts";
 import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 
@@ -26,7 +27,7 @@ import { ThemeProvider, useTheme } from "../src/theme/ThemeProvider";
 void SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const theme = useTheme();
@@ -56,6 +57,27 @@ function RootNavigator() {
       <View style={[styles.splash, { backgroundColor: theme.bg }]}>
         <ActivityIndicator color={theme.brand} size="large" />
       </View>
+    );
+  }
+
+  /*
+    Compte authentifié mais onboarding inachevé.
+
+    Le serveur refuse toutes les routes métier dans cet état (403
+    ONBOARDING_REQUIRED) : laisser entrer dans les onglets produirait une
+    erreur sur chaque écran, sans jamais dire comment en sortir. On bloque
+    donc ici, avec la marche à suivre.
+
+    Ce n'est PAS une redirection : l'écran remplace la navigation tant que la
+    condition tient, et disparaît de lui-même dès que `onboarded` passe à vrai
+    (au retour du navigateur, ou au rafraîchissement du profil).
+  */
+  if (status === "authenticated" && user && !user.onboarded) {
+    return (
+      <>
+        <StatusBar style={theme.mode === "dark" ? "light" : "dark"} />
+        <OnboardingRequired />
+      </>
     );
   }
 
