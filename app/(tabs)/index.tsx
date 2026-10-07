@@ -40,7 +40,7 @@ import {
  * et puis-je pointer tout de suite ?
  *
  * Quand une séance est dans la fenêtre de pointage (±30 min), un raccourci
- * vers le scan NFC apparaît en tête d'écran.
+ * vers le scan QR apparaît en tête d'écran.
  */
 export default function HomeScreen() {
   const theme = useTheme();
@@ -66,7 +66,7 @@ export default function HomeScreen() {
   // invaliderait le `useMemo` ci-dessous en permanence.
   const bookings = useMemo(() => data?.bookings ?? [], [data]);
 
-  /** Séance pointable maintenant : c'est elle qui déclenche le raccourci NFC. */
+  /** Séance pointable maintenant : c'est elle qui déclenche le raccourci QR. */
   const checkInNow = useMemo(
     () =>
       bookings.find(

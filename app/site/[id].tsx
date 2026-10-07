@@ -18,8 +18,8 @@ import { formatDistance } from "../../src/utils/format";
  * Détail d'une salle — route dynamique `/site/[id]`.
  *
  * Utilité mobile : on y arrive depuis la liste des salles pour savoir comment
- * s'y rendre, ce qu'on y pratique, et quel est l'identifiant de la borne NFC
- * de l'entrée (information utile en soutenance et en cas de doute sur place).
+ * s'y rendre, ce qu'on y pratique, et quel est le code de la borne QR affichée
+ * à l'entrée (information utile en soutenance et en cas de doute sur place).
  */
 export default function SiteDetailScreen() {
   const theme = useTheme();
@@ -123,8 +123,8 @@ export default function SiteDetailScreen() {
           <>
             <Text style={[styles.tag, { color: theme.text }]}>{site.nfcTagId}</Text>
             <Text style={[styles.tagHint, { color: theme.muted }]}>
-              Identifiant de la borne NFC installée à l’entrée. Approchez-y votre
-              téléphone le jour de votre séance pour valider votre présence.
+              Code du QR affiché à l’entrée de la salle. Scannez-le depuis
+              l’onglet Pointer le jour de votre séance pour valider votre présence.
             </Text>
             <Button
               label="Aller au pointage"
@@ -135,7 +135,7 @@ export default function SiteDetailScreen() {
           </>
         ) : (
           <Text style={[styles.tagHint, { color: theme.muted }]}>
-            Cette salle n’est pas encore équipée de borne NFC. Présentez-vous à
+            Cette salle n’a pas encore d’affiche QR. Présentez-vous à
             l’accueil pour valider votre présence.
           </Text>
         )}

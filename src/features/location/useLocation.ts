@@ -118,7 +118,7 @@ export function useLocation() {
 
   /**
    * Lit la position uniquement si la permission est DÉJÀ accordée.
-   * Utilisé par le pointage NFC : on ne veut pas ouvrir une demande de
+   * Utilisé par le pointage QR : on ne veut pas ouvrir une demande de
    * permission au milieu d'un scan, mais on profite de la position si elle
    * est disponible pour renforcer la validation côté serveur.
    */

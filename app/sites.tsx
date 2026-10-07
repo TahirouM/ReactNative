@@ -78,7 +78,7 @@ export default function SitesScreen() {
               label={`${item.upcomingSessions} séance${item.upcomingSessions > 1 ? "s" : ""}`}
               tone={item.upcomingSessions > 0 ? "accent" : "neutral"}
             />
-            {item.nfcTagId ? <Badge label="Borne NFC" tone="court" icon="📲" /> : null}
+            {item.nfcTagId ? <Badge label="Borne QR" tone="court" icon="📷" /> : null}
           </View>
         </Card>
       </Pressable>

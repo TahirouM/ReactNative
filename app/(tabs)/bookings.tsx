@@ -317,11 +317,11 @@ function BookingRow({
           </Text>
         </View>
 
-        {/* Trace du pointage : c'est la preuve visible de l'action NFC. */}
+        {/* Trace du pointage : c'est la preuve visible du scan QR. */}
         {booking.checkedInAt ? (
           <View style={[styles.checkIn, { backgroundColor: theme.brandSoft }]}>
             <Text style={[styles.checkInText, { color: theme.onBrandSoft }]}>
-              {booking.checkInMethod === "nfc" ? "📲 Pointé par NFC" : "✓ Pointé"}
+              {checkInLabel(booking.checkInMethod)}
               {" · "}
               {formatDateTime(booking.checkedInAt)}
             </Text>
@@ -444,3 +444,25 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+
+/**
+ * Libellé de la trace de pointage, selon la façon dont la présence a été
+ * validée. `nfc` reste prévu : des réservations enregistrées avant le passage
+ * au QR code portent encore cette valeur.
+ */
+function checkInLabel(method: string | null): string {
+  switch (method) {
+    case "qr":
+      return "📷 Pointé par QR code";
+    case "nfc":
+      return "📲 Pointé par badge NFC";
+    case "simulated":
+      return "✓ Pointé (démonstration)";
+    case "manual":
+      return "⌨️ Pointé par saisie du code";
+    case "web":
+      return "✓ Pointé par le coach";
+    default:
+      return "✓ Pointé";
+  }
+}

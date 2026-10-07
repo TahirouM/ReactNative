@@ -281,7 +281,11 @@ export default function SessionDetailScreen() {
           <InfoBanner
             tone="court"
             message={`Présence validée${
-              booking.checkInMethod === "nfc" ? " par NFC" : ""
+              booking.checkInMethod === "qr"
+                ? " par QR code"
+                : booking.checkInMethod === "nfc"
+                  ? " par badge NFC"
+                  : ""
             }${booking.checkedInAt ? ` le ${formatDateTime(booking.checkedInAt)}` : ""}.`}
           />
         ) : isPast ? null : (

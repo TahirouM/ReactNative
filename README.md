@@ -2,8 +2,8 @@
 
 Application mobile du projet **ClubSport** (club sportif multi-sites), adossée
 au projet Next.js du module précédent. Elle ajoute au produit web ce qu'un
-navigateur ne peut pas faire : **valider une présence en approchant le
-téléphone d'une borne NFC**, et **trier les séances par distance réelle**.
+navigateur ne peut pas faire : **valider une présence en scannant le QR code
+affiché à l'entrée de la salle**, et **trier les séances par distance réelle**.
 
 | | |
 |---|---|
@@ -12,7 +12,7 @@ téléphone d'une borne NFC**, et **trier les séances par distance réelle**.
 | **Option choisie** | **A** — réutilisation du backend Next.js |
 | **Expo SDK** | 57 · React Native 0.86.3 · React 19.2 |
 | **Navigation** | Expo Router (typed routes) |
-| **Cible de test** | iPhone réel, même réseau Wi-Fi que le poste de développement |
+| **Cible de test** | iPhone réel dans **Expo Go**, même réseau Wi-Fi que le poste de développement |
 
 ---
 
@@ -28,15 +28,26 @@ capteur que l'ordinateur n'a pas :
 
 | Question | Ce que le mobile apporte | Capteur |
 |---|---|---|
-| « Je suis arrivé, comment je signale ma présence ? » | On approche le téléphone de la borne à l'entrée. Plus de file à l'accueil, plus de coach qui cochera une liste. | **NFC** |
+| « Je suis arrivé, comment je signale ma présence ? » | On scanne l'affiche QR posée à l'entrée. Plus de file à l'accueil, plus de coach qui cochera une liste. | **Caméra** |
 | « Qu'est-ce qui commence bientôt près d'ici ? » | Les séances sont triées par distance réelle depuis la position du téléphone, pas par ordre alphabétique de salle. | **GPS** |
 | « Suis-je vraiment pointé ? » | Un journal local conserve chaque passage, y compris les refus, consultable même hors réseau. | Stockage |
 
-Le pointage NFC est le cœur du produit mobile, et il est **volontairement
-difficile à falsifier** : le membre ne choisit pas la séance qu'il valide.
-C'est le tag physique de la salle, croisé avec la fenêtre horaire et — quand la
-permission est accordée — la position du téléphone, qui détermine la
-réservation concernée. On ne peut pas pointer depuis chez soi.
+Le pointage par QR code est le cœur du produit mobile, et il est
+**volontairement difficile à falsifier** : le membre ne choisit pas la séance
+qu'il valide. C'est le code de la borne de la salle, croisé avec la fenêtre
+horaire et — quand la permission est accordée — la position du téléphone, qui
+détermine la réservation concernée. Un QR photographié puis présenté depuis
+chez soi est refusé (`TOO_FAR`) dans les salles qui exigent la proximité.
+
+> **Historique : du NFC au QR code.** La première version lisait une puce NFC.
+> Elle imposait un module natif absent d'Expo Go, un development build et, sur
+> iOS, un entitlement Apple accordé au cas par cas : le pointage était
+> indisponible pour une partie des utilisateurs, et la démonstration dépendait
+> d'une chaîne de compilation. La caméra est présente sur tous les téléphones
+> et fonctionne dans Expo Go ; côté club, une affiche s'imprime depuis le
+> back-office (`/admin/bornes`). L'identifiant de borne, la validation serveur
+> et le croisement GPS n'ont pas changé — seule la façon de lire le code a
+> changé. La colonne s'appelle encore `nfcTagId` (voir limitations).
 
 ---
 
@@ -51,14 +62,14 @@ ouverture de l'app
 Accueil          prochaine séance + raccourci « Pointer » si on est dans les ±30 min
 Proches   (GPS)  demande de permission → position → séances triées par distance
                  → détail séance → RÉSERVATION (mutation serveur)
-Pointer   (NFC)  lecture de la carte → position → validation serveur
-                 → succès haptique + visuel → trace locale
+Pointer   (QR)   caméra → lecture du QR de l'affiche → position → validation
+                 serveur → succès haptique + visuel → trace locale
 Séances          réservations à venir / historique paginé, annulation possible
 Profil           adhésion, statistiques, journal des pointages, déconnexion
 ```
 
 Les huit étapes demandées par le cahier des charges sont couvertes :
-ouverture → session → écran principal → action GPS → action NFC → validation
+ouverture → session → écran principal → action GPS → scan QR → validation
 backend → résultat utilisateur → historique.
 
 ---
@@ -68,7 +79,10 @@ backend → résultat utilisateur → historique.
 ### Prérequis
 
 - **Node.js ≥ 20.19.4** (voir la limitation connue n° 1 plus bas)
-- Le **backend Next.js lancé** (`cd ../nextjs && npm run dev`, port 3005)
+- Le **backend Next.js lancé** sur le port 3005 : `cd ../nextjs && npm run dev`,
+  ou en conteneur `docker compose up -d` (voir le README Next.js, § Docker).
+  Le téléphone joint le Mac par son IP Wi-Fi : dans les deux cas, c'est le
+  port 3005 **de l'hôte** qui est publié.
 - Une **base PostgreSQL** peuplée : `cd ../nextjs && npm run db:seed`
 - Un **iPhone** sur le même réseau Wi-Fi que le Mac
 
@@ -97,53 +111,32 @@ EXPO_PUBLIC_API_URL="https://clubsport-seven.vercel.app"
 
 ---
 
-## 4. Les deux environnements de test
+## 4. Environnement de test : Expo Go
 
-L'énoncé demande de savoir expliquer les deux. C'est une distinction
-structurante, pas un détail de configuration.
-
-### Expo Go — itération rapide
+**Tout le parcours fonctionne dans Expo Go**, sur un téléphone réel : scan QR
+(`expo-camera`), géolocalisation (`expo-location`), stockage sécurisé
+(`expo-secure-store`), retours haptiques. Aucun module natif hors du SDK Expo
+n'est utilisé, aucune compilation n'est nécessaire.
 
 ```bash
-npm start
+npm start      # puis scanner le QR de Metro avec l'appareil photo de l'iPhone
 ```
 
-**Fonctionne :** navigation, authentification, géolocalisation, réservations,
-annulations, historique, thème clair/sombre, états de chargement et d'erreur,
-mode hors ligne.
+> Ne pas confondre les deux QR codes : celui affiché par `npm start` ouvre
+> l'app dans Expo Go ; celui de l'affiche de la salle (`/admin/bornes` côté web)
+> se scanne **depuis l'onglet Pointer de l'app**.
 
-**Ne fonctionne pas : le scan NFC.** `react-native-nfc-manager` est un module
-natif ; il n'est pas compilé dans le binaire Expo Go, qui est une application
-générique publiée sur l'App Store.
+### Development build — facultative
 
-L'app ne plante pas pour autant : le module est chargé **paresseusement** par
-un `require()` encapsulé (`src/features/nfc/nfcManager.ts`). Son absence est
-détectée et remontée comme l'état `UNSUPPORTED_ENV`, ce qui affiche une
-explication et propose la **saisie manuelle du code de borne** — laquelle passe
-par exactement la même validation serveur que le scan.
-
-### Development build — obligatoire pour le NFC
+`expo-dev-client` est installé, ce qui permet de produire une development build
+si un module natif hors Expo Go devenait nécessaire :
 
 ```bash
-npx expo install --fix         # aligne les versions natives
 npx expo prebuild --clean      # génère le projet iOS
 npx expo run:ios --device      # compile et installe sur l'iPhone branché
 ```
 
-Prérequis : Xcode, un compte Apple (un compte gratuit suffit pour un appareil
-personnel), et l'iPhone branché en USB au premier lancement.
-
-> **iOS et NFC :** la lecture NFC exige l'entitlement
-> `com.apple.developer.nfc.readersession.formats`, déjà déclaré dans
-> `app.json`. Sur un compte développeur gratuit, cet entitlement peut être
-> refusé à la signature ; il faut alors un compte payant. C'est une contrainte
-> de la plateforme, pas du code.
-
-Alternative sans Xcode local, via EAS :
-
-```bash
-npx eas build --profile development --platform ios
-```
+Elle n'est **pas requise** pour ce projet depuis le passage au QR code.
 
 ---
 
@@ -154,14 +147,15 @@ npx eas build --profile development --platform ios
 Mot de passe commun : **`Password123!`**
 (remplissables en un toucher depuis l'écran de connexion)
 
-| Compte | Rôle | Adhésion | Ce qu'il démontre |
-|---|---|---|---|
-| `nouveau@clubsport.fr` | MEMBER | **ACTIVE** | Parcours complet : réserver, pointer |
-| `membre@clubsport.fr` | MEMBER | **SUSPENDED** | Refus métier expliqué par le serveur |
-| `coach@clubsport.fr` | COACH | ACTIVE | Rôle distinct |
+| Compte | Rôle | Ce qu'il démontre |
+|---|---|---|
+| `membre@clubsport.fr` | MEMBER, adhésion **ACTIVE** | **Compte de la démo** : réserver, pointer, historique |
+| `membre.lyon@clubsport.fr` | MEMBER, adhésion ACTIVE | Salles de test lyonnaises |
+| `nouveau@clubsport.fr` | MEMBER, **non onboardé** | L'app explique qu'il faut terminer l'inscription sur le web |
+| `coach@clubsport.fr` | COACH | Rôle distinct |
 
-> L'état exact des adhésions dépend du dernier `npm run db:seed`. Vérification :
-> `psql -c 'select email, status from "User" u join "Membership" m on m."userId"=u.id;'`
+> L'état exact dépend du dernier `npm run db:seed` côté Next.js : relancer le
+> seed avant une démonstration remet tous les comptes dans cet état.
 
 ### Scénario GPS
 
@@ -174,87 +168,77 @@ Mot de passe commun : **`Password123!`**
    Relancer l'app : l'onglet Proches affiche une explication et un bouton
    « Choisir une salle manuellement » — l'app reste utilisable.
 
-### Scénario NFC (development build)
+### Scénario de scan QR (téléphone réel)
 
-**Programmation des cartes fournies.** Écrire un enregistrement **NDEF texte**
-contenant exactement l'un de ces identifiants (avec NFC Tools, par exemple) :
+**Le QR de test.** Côté web, se connecter en `admin@clubsport.fr`, ouvrir
+**Back-office → Bornes QR** (`/fr/admin/bornes`) et imprimer l'affiche — ou
+l'afficher sur un second écran. Chaque affiche encode l'identifiant de borne de
+la salle (le texte est aussi imprimé sous le code, pour la saisie manuelle).
 
-| Carte | Salle | Coordonnées |
+| Borne | Salle | Proximité exigée |
 |---|---|---|
-| `nfc-bastille-entree` | ClubSport Bastille | 48.8534, 2.3719 |
-| `nfc-nation-entree` | ClubSport Nation | 48.8483, 2.3958 |
-| `nfc-montreuil-entree` | ClubSport Montreuil | 48.8624, 2.4433 |
+| `nfc-lyon-demo-entree` | **ClubSport Lyon Démo** | non — **à utiliser en soutenance** |
+| `nfc-lyon-part-dieu-entree` | ClubSport Lyon Part-Dieu | non |
+| `nfc-lyon-confluence-entree` | ClubSport Lyon Confluence | non |
+| `nfc-bastille-entree` | ClubSport Bastille | oui (1 km) |
+| `nfc-nation-entree` | ClubSport Nation | oui (1 km) |
+| `nfc-montreuil-entree` | ClubSport Montreuil | oui (1 km) |
 
-À défaut de NDEF, l'UID matériel de la puce est utilisé comme identifiant de
-secours ; il faut alors l'enregistrer dans le champ `nfcTagId` du site
-correspondant, côté base.
+**Pourquoi la salle Lyon Démo.** Le seed y crée une séance **toutes les 5
+minutes, en continu**, déjà réservée pour `membre@`, `membre.lyon@` et un
+troisième membre. Il y a donc toujours une séance dans la fenêtre de ±30 min,
+à n'importe quelle heure de la soutenance, et la salle n'exige pas la
+proximité : le scan fonctionne depuis la salle d'examen.
 
-**Cas nominal.** Réserver une séance qui commence dans moins de 30 minutes,
-puis onglet **Pointer** → « Toucher pour scanner » → présenter la carte.
-Résultat attendu : vibration de succès, écran de confirmation détaillant les
-trois vérifications (borne reconnue, position cohérente, enregistrement
-serveur), et apparition de la ligne « 📲 Pointé par NFC » dans l'onglet
-Séances.
+**Cas nominal.** Connecté en `membre@clubsport.fr` → onglet **Pointer** →
+« Scanner le QR code » → la permission caméra est demandée à ce moment-là →
+viser l'affiche Lyon Démo. Résultat attendu : vibration, écran de confirmation
+(borne reconnue, position, enregistrement serveur), puis la ligne
+« 📷 Pointé par QR code » dans l'onglet Séances et une entrée dans le journal
+du profil. Côté web, la feuille de présence de la séance passe en `ATTENDED`.
 
 **Cas d'erreur à démontrer** — tous gérés avec un message et un conseil :
 
 | Situation | Code | Comportement |
 |---|---|---|
-| Carte non enregistrée | `UNKNOWN_TAG` | « Borne inconnue » |
+| QR d'une borne inconnue | `UNKNOWN_TAG` | « Borne inconnue » + conseil |
+| QR qui n'est pas un code de borne (vide, illisible) | `UNREADABLE_CODE` | Refusé **sans appel serveur** |
 | Aucune réservation dans le créneau | `NO_BOOKING` | Explique la règle des ±30 min |
-| Téléphone loin de la salle | `TOO_FAR` | Indique la distance mesurée |
-| Carte vierge | `EMPTY_TAG` | Invite à réessayer |
-| Scan interrompu | `FAILED` | Conseille de maintenir le téléphone |
-| Annulation par l'utilisateur | `CANCELLED` | Retour silencieux, aucune alerte |
+| Téléphone loin d'une salle qui exige la proximité | `TOO_FAR` | Indique la distance mesurée |
+| Caméra refusée | `PERMISSION_DENIED` | Explique + propose la saisie du code |
 | Session expirée | `UNAUTHENTICATED` | Déconnexion et retour au login |
-| Expo Go | `UNSUPPORTED_ENV` | Explique + propose la saisie manuelle |
 
-### Mode démonstration du pointage (sans carte NFC)
+**Double scan.** La caméra continue d'émettre tant que le QR est dans le
+champ. Un verrou (`locked` dans `useCheckIn.ts`) est posé **avant** l'appel
+réseau et relâché seulement quand l'utilisateur a vu le résultat : un même QR
+ne part qu'une fois.
 
-Quand le lecteur NFC natif est indisponible — Expo Go, ou development build
-compilé sans le plugin — l'écran *Pointer* propose un **mode démonstration**
-qui permet de dérouler le parcours métier complet sans carte physique.
+**Formats acceptés.** L'identifiant nu (`nfc-lyon-demo-entree`, ce que génère
+le back-office), ou une URL qui le porte (`?tag=` / `?code=`, ou
+`clubsport://check-in?tag=…`) — voir `normalizeScannedValue` dans
+`src/features/checkin/qrScanner.ts`.
 
-**Ce qui est simulé : une seule étape.** Le contact entre la puce et l'antenne
-du téléphone. Le mode produit un identifiant de borne, exactement comme
-`readTagId()` le ferait.
+### Saisie manuelle et mode démonstration
 
-**Ce qui reste réel : tout le reste.**
+Deux replis, utilisés **en plus** du vrai scan, jamais à sa place :
 
-| Étape | En mode démo |
-|---|---|
-| Lecture de la carte | **simulée** (délai de 600 ms, comme un vrai échange NDEF) |
-| Position GPS | réelle, lue sur le capteur |
-| Validation métier | réelle — `POST /api/check-in`, et **le serveur peut refuser** |
-| Écriture en base | réelle — la réservation passe en `ATTENDED` |
-| Trace locale | réelle, avec la provenance consignée |
+- **Saisie du code** imprimé sous le QR : utile si la caméra est refusée.
+- **Mode démonstration** : remplace uniquement la lecture du QR par un
+  identifiant choisi dans la liste des salles **réelles** (`GET /api/sites`,
+  rien n'est codé en dur), plus une borne inconnue
+  (`nfc-borne-non-enregistree`) pour démontrer le refus. Utile sur simulateur
+  iOS (pas de caméra) ou pour montrer un refus qu'aucune affiche ne produit.
 
-Les bornes proposées viennent de `GET /api/sites` : **aucun identifiant n'est
-codé en dur**. Si un administrateur change le tag d'une salle côté web, la
-liste suit. Une quatrième entrée synthétique (`nfc-borne-non-enregistree`)
-permet de démontrer le refus d'un tag inconnu.
+**Ce qui reste réel dans les deux cas** : la position GPS, la validation
+`POST /api/check-in` (le serveur peut refuser), l'écriture en base, la trace
+locale.
 
 **Traçabilité.** Un pointage de démonstration ne peut pas se faire passer pour
-un vrai scan :
-
-- l'écran de succès affiche une pastille **« Simulé »** à côté de
-  « Présence validée » ;
-- la ligne de preuve indique « identifiant simulé, reconnu » et non
-  « carte lue et reconnue » ;
-- le journal du profil marque l'entrée « · simulé » ;
-- **côté serveur**, `Booking.checkInMethod` reçoit `"simulated"` au lieu de
-  `"nfc"` : la feuille de présence du club distingue donc une présence de
-  démonstration d'une vraie, définitivement. La valeur est contrainte par une
-  liste fermée (`nfc` / `simulated` / `manual`) — un client qui en inventerait
-  une reçoit un **400**.
-
-**Garde-fou.** Le mode n'apparaît **que** si le NFC natif est absent
-(`canSimulate`). Sur un development build où le lecteur fonctionne, l'app
-impose le vrai scan : pas de raccourci qui contournerait un capteur présent.
-
-C'est ce qui distingue ce mode du « NFC simulé sans usage métier » que le
-cahier des charges sanctionne : ici la chaîne métier n'est pas simulée, elle
-est exercée pour de vrai.
+un vrai scan : pastille « Simulé » sur l'écran de succès, mention « · simulé »
+dans le journal, et **côté serveur** `Booking.checkInMethod` reçoit
+`"simulated"` (ou `"manual"`) au lieu de `"qr"`. La valeur est contrainte par
+une liste fermée (`qr` / `nfc` / `simulated` / `manual`) : un client qui en
+inventerait une reçoit un **400**.
 
 **Erreur réseau.** Couper le Wi-Fi du Mac (ou activer le mode avion sur
 l'iPhone) : les écrans affichent un bandeau « Hors ligne » avec la date de la
@@ -285,8 +269,8 @@ terrain »*.
 l'exploite sur son axe de largeur `wdth` pour évoquer les lettrages peints sur
 les murs de gymnase ; les polices variables n'étant pas chargeables par axe en
 React Native, la hiérarchie est restituée par les graisses 600/700), et **IBM
-Plex Mono** là où des caractères doivent s'aligner en colonne — heures, tags
-NFC, coordonnées, statistiques. C'est la règle de la classe `.nums` du web.
+Plex Mono** là où des caractères doivent s'aligner en colonne — heures, codes
+de borne, coordonnées, statistiques. C'est la règle de la classe `.nums` du web.
 
 **Formes reprises du système `ui.tsx` :**
 
@@ -330,7 +314,7 @@ app/                      routes et orchestration (Expo Router)
 ├─ (tabs)/
 │  ├─ index.tsx           accueil — action du moment
 │  ├─ nearby.tsx          séances proches (GPS, FlatList)
-│  ├─ scan.tsx            pointage NFC (automate à 4 états)
+│  ├─ scan.tsx            pointage par QR code (automate à 4 états)
 │  ├─ bookings.tsx        réservations + historique paginé
 │  └─ profile.tsx         adhésion, journal des pointages, déconnexion
 ├─ session/[id].tsx       route dynamique — détail + réservation
@@ -342,11 +326,11 @@ src/
 ├─ storage/               secureStore.ts (jeton), cache.ts (hors ligne)
 ├─ features/
 │  ├─ auth/               AuthProvider — cycle de vie de la session
-│  ├─ nfc/                nfcManager, useCheckIn, history, simulator
+│  ├─ checkin/            qrScanner, useCheckIn, history, simulator
 │  └─ location/           useLocation — permission et position
 ├─ hooks/                 useApiResource — loading/error/empty + cache
 ├─ components/            Button, Card, Badge, SessionCard, States,
-│                         SimulationPanel
+│                         QrScannerView, SimulationPanel
 ├─ theme/                 jetons de design + thème clair/sombre
 ├─ types/                 contrats de l'API
 └─ utils/                 formatage dates et distances
@@ -354,10 +338,11 @@ src/
 
 ### Décisions structurantes
 
-**Le module NFC est chargé paresseusement.** Un `import` classique ferait
-planter l'app entière dans Expo Go, y compris les écrans sans rapport. Le
-`require()` encapsulé permet de traiter l'absence du module comme un état
-applicatif affichable.
+**La caméra est isolée derrière `qrScanner.ts`.** L'écran ne connaît que deux
+choses : « le scan est-il possible ? » (`READY` / `UNDETERMINED` / `DENIED`)
+et « voici un identifiant de borne ». Permission, normalisation du contenu
+lu et formats acceptés (QR uniquement : un code-barres d'emballage dans le
+champ ne déclenche rien) sont traités dans ce module.
 
 **Un seul client HTTP.** `src/services/http.ts` centralise l'ajout du jeton, le
 délai d'attente (12 s), la distinction panne réseau / erreur métier / session
@@ -400,9 +385,9 @@ revérifie tout :
   transaction Prisma).
 - **Annuler** — la réservation appartient bien à l'appelant ; une présence déjà
   validée n'est pas annulable.
-- **Pointer** — le tag correspond à une salle, le membre y a une réservation,
-  la séance commence dans les ±30 min, et la position est à moins d'un
-  kilomètre.
+- **Pointer** — le code correspond à une salle, le membre y a une réservation,
+  la séance commence dans les ±30 min, et — si la salle l'exige
+  (`requiresProximity`) — la position est à moins d'un kilomètre.
 
 ---
 
@@ -411,15 +396,15 @@ revérifie tout :
 | Permission | Quand elle est demandée | Si refusée |
 |---|---|---|
 | **Position** (`NSLocationWhenInUseUsageDescription`) | À l'ouverture de l'onglet *Proches*, et nulle part ailleurs | Explication + liste des salles à choisir manuellement |
-| **NFC** (`NFCReaderUsageDescription`) | Au toucher du bouton de scan | Message distinguant Expo Go / appareil incompatible / NFC coupé |
+| **Caméra** (`NSCameraUsageDescription`) | Au toucher de « Scanner le QR code » | Explication + saisie manuelle du code inscrit sous le QR |
 
 Aucune permission n'est demandée au lancement de l'application. Le geste de
 l'utilisateur précède toujours la demande, ce qui la rend compréhensible.
 
 Pour le pointage, la position est lue **seulement si la permission est déjà
 accordée** (`getIfAlreadyGranted`) : on n'interrompt pas un scan par une
-demande système. Sans position, le pointage reste possible — le tag physique
-prouve déjà la présence.
+demande système. Sans position, le pointage reste possible dans les salles qui
+n'exigent pas la proximité ; la distance est enregistrée quand elle est connue.
 
 ---
 
@@ -432,7 +417,7 @@ prouve déjà la présence.
 | Reprise après redémarrage | Jeton dans le trousseau, position et listes en cache |
 | Retour au premier plan | `AppState` rafraîchit le profil — une adhésion réactivée côté web est prise en compte |
 | Interruptions | Toute requête est annulable (`AbortController`) ; aucun `setState` après démontage |
-| Sessions NFC | `cancelTechnologyRequest()` en `finally` — une session laissée ouverte bloquerait les scans suivants |
+| Double scan | Verrou posé avant l'appel réseau, relâché après affichage du résultat — un QR resté dans le champ ne part qu'une fois |
 
 ### Performance
 
@@ -468,12 +453,12 @@ Routes ajoutées au projet Next.js pour cette application (`../nextjs/src/app/ap
 | `GET /api/bookings` | Historique paginé par curseur |
 | `POST /api/bookings` | **Mutation** — réservation, règles métier vérifiées |
 | `DELETE /api/bookings/[id]` | Annulation |
-| `POST /api/check-in` | **Mutation NFC** — validation de présence |
+| `POST /api/check-in` | **Mutation du scan QR** — validation de présence |
 
 `GET /api/sessions/nearby` et `POST /api/check-in` existaient déjà : elles
 avaient été écrites lors du projet web en prévision de l'app mobile. Elles ont
 été étendues pour accepter l'authentification par jeton **en plus** du cookie
-(`src/lib/api-auth.ts`), et le check-in croise désormais NFC et GPS.
+(`src/lib/api-auth.ts`), et le check-in croise le code de borne et le GPS.
 
 Toutes les données affichées viennent de PostgreSQL via Prisma. **Aucune donnée
 fictive** dans l'application.
@@ -487,20 +472,17 @@ fictive** dans l'application.
    construit et l'app fonctionne — vérifié — mais la mise à jour est
    recommandée : `nvm install 22 && nvm use 22`.
 
-2. **Le NFC ne peut pas être testé dans Expo Go.** Contrainte de plateforme,
-   pas du projet. Un development build est nécessaire ; la saisie manuelle du
-   code de borne permet de démontrer la validation serveur en attendant.
+2. **Un QR code se photographie.** C'est la contrepartie du passage au QR. La
+   parade est côté serveur : fenêtre de ±30 min et, dans les salles qui
+   l'exigent, contrôle de distance (1 km). Les salles de test lyonnaises ont
+   `requiresProximity = false` pour permettre la démonstration à distance ; la
+   distance y est quand même mesurée et enregistrée.
 
-   Même dans un development build, le scan reste indisponible si le binaire a
-   été compilé **avant** l'ajout du plugin `react-native-nfc-manager` : le
-   plugin est intégré à la compilation native, pas au bundle JavaScript. Il
-   faut alors reconstruire (`npx expo prebuild --clean`, puis
-   `npx expo run:ios --device`). L'écran de pointage détecte ce cas et affiche
-   la commande à lancer.
-
-3. **Écriture de tags non implémentée.** L'app lit les cartes, elle ne les
-   programme pas. L'enregistrement d'une nouvelle borne se fait côté
-   administration web (champ `nfcTagId` du site).
+3. **Le champ s'appelle encore `nfcTagId`.** Côté base (`Site.nfcTagId`) et
+   dans le contrat de `POST /api/check-in`. Le renommer imposerait une
+   migration et casserait les clients déjà installés, pour un gain purement
+   cosmétique : l'identifiant désigne la borne, quelle que soit la façon de le
+   lire.
 
 4. **Le détail d'une séance filtre une liste** au lieu d'interroger une route
    dédiée `/api/sessions/[id]`, qui n'existe pas. La liste est bornée à 100
@@ -570,12 +552,12 @@ corrigées.
 
 ### Partie explicable intégralement
 
-`src/features/nfc/nfcManager.ts` et le parcours de pointage complet
-(`useCheckIn.ts` → `POST /api/check-in`) : le chargement paresseux du module
-natif et la raison pour laquelle il est indispensable, l'extraction de
-l'identifiant (NDEF texte puis UID en secours), la fermeture de session en
-`finally`, la taxonomie des erreurs, et le croisement NFC + GPS côté serveur
-comme garde-fou anti-falsification.
+Le parcours de pointage complet (`qrScanner.ts` → `useCheckIn.ts` →
+`POST /api/check-in`) : la demande de permission au geste et non au montage,
+le verrou anti double scan posé avant l'appel réseau, la normalisation du
+contenu lu (identifiant nu ou URL), la taxonomie des erreurs, et le croisement
+code de borne + GPS + fenêtre horaire côté serveur comme garde-fou
+anti-falsification.
 
 ### Limites et bugs rencontrés
 
@@ -589,7 +571,8 @@ comme garde-fou anti-falsification.
   codant une IP en dur.
 - **Avertissement Node persistant** : voir limitation n° 1.
 
-- **Le garde-fou NFC ne fonctionnait pas — corrigé après test sur iPhone.**
+- **Le garde-fou NFC ne fonctionnait pas — corrigé après test sur iPhone**
+  (version NFC, avant le passage au QR code).
   La première version encapsulait le `require("react-native-nfc-manager")`
   dans un `try/catch`, en supposant que l'import échouerait dans Expo Go. Faux :
   le code JS du paquet est présent dans `node_modules`, donc le `require`
@@ -623,8 +606,8 @@ comme garde-fou anti-falsification.
   - connexion → jeton ; `/me` → profil et adhésion ; requête sans jeton → **401**
   - `nearby` → 35 séances triées par distance
   - réservation avec adhésion suspendue → **403 `NO_MEMBERSHIP`**
-  - **parcours complet** : réservation (**201**) → pointage NFC + GPS (**200**,
-    `checkInMethod: "nfc"`, distance 0 km) → statut `ATTENDED` persisté en base
+  - **parcours complet** : réservation (**201**) → pointage QR + GPS (**200**,
+    `checkInMethod: "qr"`) → statut `ATTENDED` persisté en base
   - tag inconnu → **404** ; GPS à 588 km → **409 `TOO_FAR`** ; hors créneau →
     **404 `NO_BOOKING`**
 - **Mode démonstration** testé contre le vrai serveur :
@@ -637,7 +620,6 @@ comme garde-fou anti-falsification.
   - `method: "je-suis-admin"` → **400**, liste de valeurs fermée
 - Backend joignable depuis l'IP LAN (prérequis du test sur iPhone réel)
 
-**Restant à faire sur ton matériel** — ce que je ne peux pas exécuter d'ici :
-lancer l'app sur l'iPhone via QR code, produire le development build avec
-Xcode, programmer les cartes NFC fournies, et enregistrer la vidéo ou les
-captures demandées au § 23 du cahier des charges.
+**Restant à faire sur le téléphone** : scanner l'affiche Lyon Démo depuis
+l'onglet Pointer dans Expo Go, tester le refus de la caméra et du GPS, et
+enregistrer la vidéo ou les captures de démonstration.

@@ -151,7 +151,7 @@ export const radius = {
  * large, texte courant en normal — le lettrage rappelle les typographies
  * peintes sur les murs de gymnase et les dossards. **IBM Plex Mono**
  * n'intervient que là où des caractères doivent s'aligner en colonne :
- * heures, identifiants de bornes NFC, coordonnées GPS.
+ * heures, identifiants de bornes, coordonnées GPS.
  *
  * `fontFamily` est appliqué via `useFonts` (voir src/theme/fonts.ts) ; ces
  * définitions ne portent que tailles, graisses et interlettrage.
@@ -179,7 +179,7 @@ export const typography = {
     fontSize: 11,
     letterSpacing: 0.3,
   },
-  /** Chiffres alignés en colonne — heures, tags NFC, coordonnées. */
+  /** Chiffres alignés en colonne — heures, codes de borne, coordonnées. */
   mono: { fontFamily: "IBMPlexMono_400Regular", fontSize: 13 },
   monoLarge: { fontFamily: "IBMPlexMono_500Medium", fontSize: 15 },
 } as const;

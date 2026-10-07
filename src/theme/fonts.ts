@@ -20,7 +20,7 @@ import {
  * cette hiérarchie par les GRAISSES statiques (600/700 pour les titres).
  *
  * **IBM Plex Mono** uniquement là où des caractères doivent s'aligner en
- * colonne : heures, identifiants de bornes NFC, coordonnées GPS. C'est la
+ * colonne : heures, identifiants de bornes, coordonnées GPS. C'est la
  * même règle que le web, où la classe `.nums` passe en chasse fixe.
  */
 
