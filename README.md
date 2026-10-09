@@ -313,7 +313,7 @@ app/                      routes et orchestration (Expo Router)
 ├─ (auth)/login.tsx       connexion (clavier géré, comptes de démo)
 ├─ (tabs)/
 │  ├─ index.tsx           accueil — action du moment
-│  ├─ nearby.tsx          séances proches (GPS, FlatList)
+│  ├─ nearby.tsx          séances proches (GPS, FlatList, vue carte)
 │  ├─ scan.tsx            pointage par QR code (automate à 4 états)
 │  ├─ bookings.tsx        réservations + historique paginé
 │  └─ profile.tsx         adhésion, journal des pointages, déconnexion
@@ -493,9 +493,11 @@ fictive** dans l'application.
    exigeraient un service externe (Expo Push) et une gestion de jetons
    d'appareil côté serveur, hors du périmètre retenu.
 
-6. **Pas de carte interactive.** `react-native-maps` est installé mais non
-   utilisé : l'itinéraire est délégué à l'application Plans du téléphone, plus
-   utile qu'une carte incrustée pour se rendre quelque part.
+6. **La carte ne fonctionne pas sur le web.** L'onglet *Proches* propose une
+   vue carte (`react-native-maps`) : une épingle par salle, ocre si la salle a
+   des séances dans le rayon, bleue sinon. `react-native-maps` n'a pas de rendu
+   web : la démonstration se fait sur téléphone. L'itinéraire, lui, reste
+   délégué à l'application Plans depuis la fiche d'une salle.
 
 ---
 

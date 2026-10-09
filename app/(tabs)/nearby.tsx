@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -22,7 +22,7 @@ import {
 } from "../../src/components/States";
 import { useLocation } from "../../src/features/location/useLocation";
 import { useApiResource } from "../../src/hooks/useApiResource";
-import { sessionsApi } from "../../src/services/clubsport";
+import { sessionsApi, sitesApi } from "../../src/services/clubsport";
 import { useTheme } from "../../src/theme/ThemeProvider";
 import { radius, spacing, typography } from "../../src/theme/tokens";
 import type { NearbySession } from "../../src/types/api";
@@ -79,6 +79,38 @@ export default function NearbyScreen() {
   }, [status]);
 
   const sessions = data?.sessions ?? [];
+
+  // Salles du club, pour la vue carte uniquement : pas d'appel réseau tant que
+  // le membre reste sur la liste. Même clé de cache que l'écran des salles.
+  const sitesFetcher = useCallback(
+    (signal: AbortSignal) => sitesApi.list(effectiveCoords, signal),
+    // Les coordonnées primitives, et non l'objet : `effectiveCoords` est
+    // recréé à chaque rendu, ce qui relancerait la requête en boucle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effectiveCoords?.latitude, effectiveCoords?.longitude],
+  );
+
+  const { data: sitesData } = useApiResource(
+    sitesFetcher,
+    [effectiveCoords?.latitude, effectiveCoords?.longitude],
+    { cacheKey: "sites", enabled: view === "map" && effectiveCoords !== null },
+  );
+
+  /**
+   * Une épingle par salle, et non par séance : les séances d'une même salle
+   * ont exactement les mêmes coordonnées, leurs épingles se superposeraient
+   * et seule celle du dessus resterait touchable. Les séances du rayon sont
+   * donc rattachées à leur salle (par nom et ville : l'API « nearby » ne
+   * renvoie pas l'identifiant de la salle).
+   */
+  const sessionsBySite = useMemo(() => {
+    const map = new Map<string, NearbySession[]>();
+    for (const session of data?.sessions ?? []) {
+      const key = `${session.site.name}|${session.site.city}`;
+      map.set(key, [...(map.get(key) ?? []), session]);
+    }
+    return map;
+  }, [data]);
 
   const renderItem = useCallback(
     ({ item }: { item: NearbySession }) => (
@@ -146,33 +178,85 @@ export default function NearbyScreen() {
             })}
           </View>
 
+          {/* Bascule Liste / Carte : mêmes pastilles que le sélecteur de rayon. */}
           <View style={styles.radiusRow}>
-            <Pressable onPress={() => setView("list")} accessibilityRole="button" accessibilityState={{ selected: view === "list" }} accessibilityLabel="Voir les séances sur la liste">
-              <Text style={[styles.chipText, { color: view === "list" ? theme.brand : theme.muted }]}>Liste</Text>
-            </Pressable>
-            <Pressable onPress={() => setView("map")} accessibilityRole="button" accessibilityState={{ selected: view === "map" }} accessibilityLabel="Voir les séances sur la carte">
-              <Text style={[styles.chipText, { color: view === "map" ? theme.brand : theme.muted }]}>Carte</Text>
-            </Pressable>
+            {(
+              [
+                { key: "list", label: "☰ Liste" },
+                { key: "map", label: "🗺️ Carte" },
+              ] as const
+            ).map((option) => {
+              const active = option.key === view;
+              return (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setView(option.key)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    {
+                      backgroundColor: active ? theme.brand : theme.card,
+                      borderColor: active ? theme.brand : theme.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: active ? theme.brandText : theme.muted },
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
           </>
         ) : null}
-        
       </View>
-    {view === "map" && effectiveCoords ? (
-      <MapView style={{ flex: 1 }} initialRegion={{
-        latitude: effectiveCoords.latitude,
-        longitude: effectiveCoords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }}>
-        {sessions.map((session) => (
-          <Marker key={session.id} coordinate={{
-            latitude: session.site.latitude,
-            longitude: session.site.longitude,
-          }} title={session.site.name} />
-        ))}
-      </MapView>
-    ) : (
+
+      {view === "map" && effectiveCoords ? (
+        <MapView
+          // `initialRegion` n'est lu qu'au montage : changer de clé recrée la
+          // carte, qui se recadre ainsi sur le nouveau rayon.
+          key={radius}
+          style={styles.map}
+          initialRegion={{
+            latitude: effectiveCoords.latitude,
+            longitude: effectiveCoords.longitude,
+            // ~1° de latitude = 111 km : la fenêtre couvre un peu plus que
+            // le diamètre du rayon choisi.
+            latitudeDelta: (radius * 2.4) / 111,
+            longitudeDelta: (radius * 2.4) / 111,
+          }}
+          showsUserLocation
+          userInterfaceStyle={theme.mode}
+        >
+          {(sitesData?.sites ?? []).map((site) => {
+            const here = sessionsBySite.get(`${site.name}|${site.city}`) ?? [];
+            const next = here[0];
+            return (
+              <Marker
+                key={site.id}
+                coordinate={{ latitude: site.latitude, longitude: site.longitude }}
+                title={site.name}
+                description={
+                  next
+                    ? `${here.length} séance${here.length > 1 ? "s" : ""} · prochaine : ${next.activity}, ${formatDateTime(next.startsAt)}`
+                    : `${site.address}, ${site.city}`
+                }
+                // Ocre : la salle a des séances dans le rayon. Bleu : hors rayon
+                // ou sans séance — même rôle des couleurs que les badges.
+                pinColor={here.length > 0 ? theme.brand : theme.court}
+                onCalloutPress={() => router.push(`/site/${site.id}`)}
+              />
+            );
+          })}
+        </MapView>
+      ) : (
       <FlatList
         data={sessions}
         keyExtractor={(item) => item.id}
@@ -268,7 +352,7 @@ export default function NearbyScreen() {
           )
         }
       />
-    )}
+      )}
     </View>
   );
 }
@@ -317,6 +401,12 @@ const styles = StyleSheet.create({
   blockBody: {
     ...typography.small,
     lineHeight: 20,
+  },
+  map: {
+    flex: 1,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radius.md,
   },
   blockActions: {
     gap: spacing.sm,
