@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import MapView, { Marker } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "../../src/components/Button";
@@ -51,6 +52,7 @@ export default function NearbyScreen() {
 
   const { status, effectiveCoords, error: locationError, request } = useLocation();
   const [radius, setRadiusKm] = useState(5);
+  const [view, setView] = useState<"list" | "map">("list");
 
   // Une position est nécessaire avant d'interroger l'API : `enabled` empêche
   // un appel réseau inutile tant qu'on ne l'a pas.
@@ -111,6 +113,7 @@ export default function NearbyScreen() {
 
         {/* Sélecteur de rayon : réponse directe à une liste vide. */}
         {effectiveCoords ? (
+          <>
           <View style={styles.radiusRow}>
             {RADII.map((value) => {
               const active = value === radius;
@@ -142,9 +145,34 @@ export default function NearbyScreen() {
               );
             })}
           </View>
-        ) : null}
-      </View>
 
+          <View style={styles.radiusRow}>
+            <Pressable onPress={() => setView("list")} accessibilityRole="button" accessibilityState={{ selected: view === "list" }} accessibilityLabel="Voir les séances sur la liste">
+              <Text style={[styles.chipText, { color: view === "list" ? theme.brand : theme.muted }]}>Liste</Text>
+            </Pressable>
+            <Pressable onPress={() => setView("map")} accessibilityRole="button" accessibilityState={{ selected: view === "map" }} accessibilityLabel="Voir les séances sur la carte">
+              <Text style={[styles.chipText, { color: view === "map" ? theme.brand : theme.muted }]}>Carte</Text>
+            </Pressable>
+          </View>
+          </>
+        ) : null}
+        
+      </View>
+    {view === "map" && effectiveCoords ? (
+      <MapView style={{ flex: 1 }} initialRegion={{
+        latitude: effectiveCoords.latitude,
+        longitude: effectiveCoords.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }}>
+        {sessions.map((session) => (
+          <Marker key={session.id} coordinate={{
+            latitude: session.site.latitude,
+            longitude: session.site.longitude,
+          }} title={session.site.name} />
+        ))}
+      </MapView>
+    ) : (
       <FlatList
         data={sessions}
         keyExtractor={(item) => item.id}
@@ -240,6 +268,7 @@ export default function NearbyScreen() {
           )
         }
       />
+    )}
     </View>
   );
 }
